@@ -17,15 +17,18 @@ class ResultFormatter:
     
     @staticmethod
     def format_username_results(data: Dict) -> None:
-        """Display username investigation in formatted tables"""
-        
+        """Display username investigation in formatted tables with confidence scores"""
+
         # Header panel
+        found_count = len(data.get('found_on', []))
+        uncertain_count = len(data.get('uncertain', []))
+
         console.print(Panel.fit(
             f"[bold cyan]Username Investigation: {data['username']}[/bold cyan]\n"
-            f"[dim]Found on {len(data.get('found_on', []))} platforms[/dim]",
+            f"[dim]Found on {found_count} platforms | {uncertain_count} uncertain results[/dim]",
             border_style="cyan"
         ))
-        
+
         # Summary table
         summary = Table(
             title="Summary",
@@ -35,32 +38,41 @@ class ResultFormatter:
         )
         summary.add_column("Metric", style="cyan")
         summary.add_column("Value", style="green")
-        
+
         summary.add_row("Username", data['username'])
         summary.add_row("Platforms Checked", str(data.get('total_platforms', 0)))
-        summary.add_row("Found On", str(len(data.get('found_on', []))))
+        summary.add_row("Confirmed", f"[green]{found_count}[/green]")
         summary.add_row("Not Found", str(len(data.get('not_found_on', []))))
-        
+        if uncertain_count > 0:
+            summary.add_row("Uncertain", f"[yellow]{uncertain_count}[/yellow]")
+
         console.print(summary)
         console.print()
-        
-        # Found platforms table
+
+        # Found platforms table with confidence scores
         if data.get('found_on'):
             found_table = Table(
-                title="[green]✓ Found On[/green]",
+                title="[green]✓ Confirmed Profiles[/green]",
                 box=box.MINIMAL_DOUBLE_HEAD,
                 show_header=True,
                 header_style="bold green"
             )
             found_table.add_column("Platform", style="cyan", width=15)
+            found_table.add_column("Confidence", style="yellow", width=10)
             found_table.add_column("URL", style="blue", no_wrap=False)
             found_table.add_column("Profile Info", style="dim")
-            
+
             profiles = data.get('profiles', {})
-            for platform in data['found_on']:
+            for item in data['found_on']:
+                platform = item['platform'] if isinstance(item, dict) else item
+                confidence = item.get('confidence', '?') if isinstance(item, dict) else '?'
+
                 profile = profiles.get(platform, {})
                 url = profile.get('url', '')
-                
+
+                # Format confidence
+                conf_str = f"{confidence:.0f}%" if isinstance(confidence, (int, float)) else str(confidence)
+
                 # Extract profile info
                 info_parts = []
                 if profile.get('name'):
@@ -69,14 +81,42 @@ class ResultFormatter:
                     info_parts.append(f"Loc: {profile['location']}")
                 if profile.get('created_at'):
                     info_parts.append(f"Since: {profile['created_at'][:10]}")
-                
+                if profile.get('bio'):
+                    bio = profile['bio'][:50] + "..." if len(profile['bio']) > 50 else profile['bio']
+                    info_parts.append(f"Bio: {bio}")
+
                 info = " | ".join(info_parts) if info_parts else "-"
-                
-                found_table.add_row(platform, url, info)
-            
+
+                found_table.add_row(platform, conf_str, url, info)
+
             console.print(found_table)
             console.print()
-        
+
+        # Uncertain results table
+        if data.get('uncertain'):
+            uncertain_table = Table(
+                title="[yellow]? Uncertain Results[/yellow]",
+                box=box.SIMPLE,
+                show_header=True,
+                header_style="bold yellow"
+            )
+            uncertain_table.add_column("Platform", style="cyan", width=15)
+            uncertain_table.add_column("Confidence", style="yellow", width=10)
+            uncertain_table.add_column("Status", style="dim")
+
+            for item in data['uncertain']:
+                platform = item.get('platform', 'Unknown')
+                confidence = item.get('confidence', 0)
+                exists = item.get('exists', False)
+
+                conf_str = f"{confidence:.0f}%"
+                status = "Possibly exists" if exists else "Unknown"
+
+                uncertain_table.add_row(platform, conf_str, status)
+
+            console.print(uncertain_table)
+            console.print()
+
         # Not found platforms
         if data.get('not_found_on'):
             not_found = Table(
@@ -85,11 +125,25 @@ class ResultFormatter:
                 show_header=False
             )
             not_found.add_column("Platform", style="dim")
-            
+
             for platform in data['not_found_on']:
                 not_found.add_row(platform)
-            
+
             console.print(not_found)
+
+        # Errors
+        if data.get('errors'):
+            error_table = Table(
+                title="[red]⚠ Errors[/red]",
+                box=box.SIMPLE,
+                show_header=False
+            )
+            error_table.add_column("Error", style="red")
+
+            for error in data['errors']:
+                error_table.add_row(str(error)[:80])
+
+            console.print(error_table)
     
     @staticmethod
     def format_domain_results(data: Dict) -> None:
@@ -191,19 +245,36 @@ class ResultFormatter:
     
     @staticmethod
     def format_email_results(data: Dict) -> None:
-        """Display email investigation results"""
-        
+        """Display email investigation results with validation info"""
+
+        # Validation status
+        valid_status = "[green]✓ Valid[/green]" if data.get('valid') else "[red]✗ Invalid[/red]"
+
         console.print(Panel.fit(
-            f"[bold cyan]Email Investigation: {data.get('email', 'N/A')}[/bold cyan]",
+            f"[bold cyan]Email Investigation: {data.get('email', 'N/A')}[/bold cyan]\n"
+            f"[dim]Status: {valid_status} | Provider: {data.get('provider', 'Unknown')}[/dim]",
             border_style="cyan"
         ))
-        
+
+        # Email details
+        if data.get('valid'):
+            details_table = Table(box=box.ROUNDED, show_header=False)
+            details_table.add_column("Field", style="cyan", width=20)
+            details_table.add_column("Value", style="green")
+
+            details_table.add_row("Email", data['email'])
+            details_table.add_row("Provider", data.get('provider', 'Unknown'))
+
+            if data.get('is_disposable'):
+                details_table.add_row("Warning", "[red]Disposable email detected[/red]")
+
+            console.print(details_table)
+            console.print()
+
         # Breaches
-        if 'breaches' in data and data['breaches']:
-            breach_data = data['breaches']
-            
+        if data.get('breach_count', 0) > 0:
             breach_table = Table(
-                title=f"Breaches ({breach_data.get('breach_count', 0)} found)",
+                title=f"[red]⚠ Breaches Found ({data['breach_count']})[/red]",
                 box=box.ROUNDED,
                 show_header=True,
                 header_style="bold red"
@@ -211,17 +282,67 @@ class ResultFormatter:
             breach_table.add_column("Service", style="cyan")
             breach_table.add_column("Date", style="yellow", width=12)
             breach_table.add_column("Data Classes", style="green")
-            
-            for breach in breach_data.get('breaches', []):
+
+            for breach in data['breaches'][:10]:  # Limit to 10
                 breach_table.add_row(
-                    breach.get('title', 'Unknown'),
-                    breach.get('breach_date', 'N/A'),
-                    ", ".join(breach.get('data_classes', [])[:3])
+                    breach.get('Name', breach.get('title', 'Unknown')),
+                    breach.get('BreachDate', breach.get('breach_date', 'N/A')),
+                    ", ".join(breach.get('DataClasses', breach.get('data_classes', []))[:3])
                 )
-            
+
+            if len(data['breaches']) > 10:
+                breach_table.add_row("...", "", f"+{len(data['breaches']) - 10} more")
+
             console.print(breach_table)
-        else:
-            console.print("[green]✓ No breaches found[/green]")
+        elif data.get('valid'):
+            console.print("[green]✓ No breaches found in known databases[/green]")
+
+        # Social Profiles
+        if data.get('social_profiles'):
+            console.print()
+            social_table = Table(
+                title="[blue]🔗 Social Profiles Found[/blue]",
+                box=box.ROUNDED,
+                show_header=True,
+                header_style="bold blue"
+            )
+            social_table.add_column("Platform", style="cyan")
+            social_table.add_column("Username", style="green")
+            social_table.add_column("URL", style="blue")
+
+            for platform, profile_data in data['social_profiles'].items():
+                users = profile_data.get('users', [])
+                for user in users[:2]:  # Show first 2
+                    social_table.add_row(
+                        platform,
+                        user.get('username', 'N/A'),
+                        user.get('url', 'N/A')
+                    )
+
+            console.print(social_table)
+
+        # Gravatar
+        if data.get('gravatar') and data['gravatar'].get('exists'):
+            console.print()
+            gravatar = data['gravatar']
+            profile = gravatar.get('profile', {})
+            console.print(f"[blue]🖼 Gravatar:[/blue] {profile.get('display_name', 'N/A')}")
+            console.print(f"   URL: {gravatar.get('url', 'N/A')}")
+
+        # Errors
+        if data.get('errors'):
+            console.print()
+            error_table = Table(
+                title="[red]⚠ Errors[/red]",
+                box=box.SIMPLE,
+                show_header=False
+            )
+            error_table.add_column("Error", style="red")
+
+            for error in data['errors']:
+                error_table.add_row(str(error)[:80])
+
+            console.print(error_table)
 
 
 def display_results(data: Dict, target_type: str) -> None:
