@@ -345,6 +345,78 @@ class ResultFormatter:
             console.print(error_table)
 
 
+    @staticmethod
+    def format_web_results(data: Dict) -> None:
+        """Display web search results"""
+
+        # Header
+        if data.get('username'):
+            title = f"Web Search: {data['username']}"
+        elif data.get('email'):
+            title = f"Web Search: {data['email']}"
+        else:
+            title = f"Web Search: {data.get('query', 'N/A')}"
+
+        blocked = len(data.get('blocked_engines', []))
+        blocked_str = f" | [red]{blocked} blocked[/red]" if blocked > 0 else ""
+
+        console.print(Panel.fit(
+            f"[bold cyan]{title}[/bold cyan]\n"
+            f"[dim]Found {data.get('total_results', 0)} results{blocked_str}[/dim]",
+            border_style="cyan"
+        ))
+
+        # Summary
+        summary = Table(box=box.ROUNDED, show_header=False)
+        summary.add_column("Metric", style="cyan")
+        summary.add_column("Value", style="green")
+
+        summary.add_row("Total Results", str(data.get('total_results', 0)))
+        if data.get('engines_used'):
+            summary.add_row("Engines Used", ", ".join(data['engines_used']))
+        if data.get('blocked_engines'):
+            summary.add_row("[red]Blocked (CAPTCHA)[/red]", ", ".join(data['blocked_engines']))
+
+        console.print(summary)
+        console.print()
+
+        # Results
+        search_results = data.get('results', [])
+        if search_results:
+            results_table = Table(
+                title=f"[green]Search Results ({len(search_results)} found)[/green]",
+                box=box.MINIMAL_DOUBLE_HEAD,
+                show_header=True,
+                header_style="bold green"
+            )
+            results_table.add_column("#", style="dim", width=4)
+            results_table.add_column("Title", style="cyan")
+            results_table.add_column("Engine", style="yellow", width=12)
+            results_table.add_column("URL", style="blue")
+
+            for i, result in enumerate(search_results[:20], 1):
+                title = result.get('title', '-')[:45]
+                engine = result.get('engine', 'Unknown')
+                url = result.get('url', 'N/A')[:50]
+                results_table.add_row(str(i), title, engine, url)
+
+            console.print(results_table)
+            console.print()
+
+            # Snippets
+            console.print("[bold yellow]Snippets:[/bold yellow]")
+            for i, result in enumerate(search_results[:5], 1):
+                snippet = result.get('snippet', '')
+                if snippet:
+                    snippet_clean = snippet[:180] + '...' if len(snippet) > 180 else snippet
+                    console.print(f"  [dim]{i}. {snippet_clean}[/dim]\n")
+        else:
+            console.print("[yellow]⚠ No results found or blocked by CAPTCHA[/yellow]")
+
+        if data.get('note'):
+            console.print(f"\n[dim italic]Note: {data['note']}[/dim italic]")
+
+
 def display_results(data: Dict, target_type: str) -> None:
     """Route to appropriate formatter"""
     formatters = {
@@ -352,8 +424,9 @@ def display_results(data: Dict, target_type: str) -> None:
         'domain': ResultFormatter.format_domain_results,
         'phone': ResultFormatter.format_phone_results,
         'email': ResultFormatter.format_email_results,
+        'web': ResultFormatter.format_web_results,
     }
-    
+
     formatter = formatters.get(target_type)
     if formatter:
         formatter(data)
