@@ -1,0 +1,45 @@
+# GhostPrint Configuration
+# Copy to config.yaml and fill in your API keys
+
+# HaveIBeenPwned API (required for breach checking)
+hibp_api_key: "YOUR_HIBP_API_KEY_HERE"
+
+# Optional: Proxy configuration
+proxy:
+  enabled: false
+  http: "http://127.0.0.1:8080"
+  https: "https://127.0.0.1:8080"
+
+# Rate limiting (requests per second)
+rate_limit: 10
+
+# Timeout for requests (seconds)
+timeout: 10
+
+# User agent
+user_agent: "GhostPrint/0.1.0"
+
+# Output settings
+output:
+  default_format: "table"  # table, json, csv
+  save_to_file: false
+  output_directory: "./results"
+
+# Modules configuration
+modules:
+  email:
+    check_breaches: true
+    check_social: true
+  
+  username:
+    platforms:  # Leave empty to check all
+      - twitter
+      - github
+      - instagram
+      - reddit
+  
+  domain:
+    enumerate_subdomains: true
+    wordlist: "default"  # or path to custom wordlist
+    check_dns: true
+    check_whois: true
