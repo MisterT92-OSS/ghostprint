@@ -126,28 +126,53 @@ def _display_results(results, output_format):
     """Display results in chosen format"""
     if output_format == 'json':
         import json
-        console.print(json.dumps(results, indent=2))
+        console.print_json(json.dumps(results, indent=2, default=str))
     elif output_format == 'csv':
-        # Simple CSV output
-        for key, value in results.items():
-            if isinstance(value, list):
-                for item in value:
-                    console.print(f"{key},{item}")
-            else:
-                console.print(f"{key},{value}")
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        def flatten_dict(d, parent_key=''):
+            items = []
+            for k, v in d.items():
+                new_key = f"{parent_key}.{k}" if parent_key else k
+                if isinstance(v, dict):
+                    items.extend(flatten_dict(v, new_key))
+                else:
+                    items.append((new_key, str(v)))
+            return items
+        
+        for key, value in flatten_dict(results):
+            writer.writerow([key, value])
+        
+        console.print(output.getvalue())
     else:
-        # Table format
-        table = Table(title="Results")
-        table.add_column("Field", style="cyan")
-        table.add_column("Value", style="green")
+        # Use new professional formatter
+        from ghostprint.utils.formatter import display_results
         
-        for key, value in results.items():
-            if isinstance(value, list):
-                table.add_row(key, "\n".join(str(v) for v in value))
-            else:
-                table.add_row(key, str(value))
-        
-        console.print(table)
+        # Determine target type from results
+        if 'username' in results:
+            display_results(results, 'username')
+        elif 'domain' in results:
+            display_results(results, 'domain')
+        elif 'phone' in results or 'original' in results:
+            display_results(results, 'phone')
+        elif 'email' in results:
+            display_results(results, 'email')
+        else:
+            # Fallback to table format
+            table = Table(title="Results")
+            table.add_column("Field", style="cyan")
+            table.add_column("Value", style="green")
+            
+            for key, value in results.items():
+                if isinstance(value, list):
+                    table.add_row(key, "\n".join(str(v) for v in value))
+                else:
+                    table.add_row(key, str(value))
+            
+            console.print(table)
 
 def main():
     """Entry point"""
